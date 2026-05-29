@@ -1,3 +1,5 @@
+import os
+from dotenv import load_dotenv
 import logging
 from dataclasses import dataclass
 from typing import Dict
@@ -188,10 +190,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 # --- 7. RUNTIME ENGINE START ---
 def main() -> None:
-    # 💡 LOCAL STEP: Replace this string with your token from @BotFather
-    TOKEN = "8841461071:AAHFOpD96XYL84WKHZeBPKEsFPIrR0PtLLY"
+    # 💡 API key from @BotFather
+    TOKEN = os.getenv("TELEGRAM_BOT_TOKEN").strip()
 
-    if TOKEN == "8841461071:AAHFOpD96XYL84WKHZeBPKEsFPIrR0PtLLY":
+    if TOKEN  == "":
         print("❌ ERROR: Please paste your real Telegram Bot Token into line 144 before running!")
         return
 
