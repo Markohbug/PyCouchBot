@@ -1,7 +1,6 @@
-import os
-from dotenv import load_dotenv
 import logging
 from dataclasses import dataclass
+import os
 from typing import Dict
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -10,6 +9,9 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     CallbackQueryHandler,
+    ChatMemberHandler,
+    MessageHandler,
+    filters,
 )
 
 # 1. LOCAL LOGGING SETUP (Prints bot activity directly to your terminal screen)
@@ -188,10 +190,50 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Lesson exited. Back to standard listening mode.")
     return ConversationHandler.END
 
-# --- 7. RUNTIME ENGINE START ---
+# --- 7. GROUP EVENT HANDLERS ---
+async def bot_added_to_group(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Introduces the bot when it is added to a group."""
+    result = update.my_chat_member
+    if not result:
+        return
+    old_status = result.old_chat_member.status
+    new_status = result.new_chat_member.status
+    if old_status in ("left", "kicked") and new_status in ("member", "administrator"):
+        chat = result.chat
+        if chat.type in (chat.GROUP, chat.SUPERGROUP):
+            await chat.send_message(
+                "👋 *PyBackendTutor online.*\n\n"
+                "I'm your automated backend engineering tutor. "
+                "Use `/start` in a private chat to begin your syllabus."
+            )
+
+async def welcome_new_members(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Welcomes new users who join the group."""
+    if not update.message or not update.message.new_chat_members:
+        return
+    bot_id = (await context.bot.get_me()).id
+    for member in update.message.new_chat_members:
+        if member.id == bot_id:
+            continue
+        name = member.mention_html() or member.full_name
+        await update.message.reply_html(
+            f"🎉 Welcome, {name}! Markoh is Glad to have you here."
+        )
+
+async def goodbye_member(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Says goodbye when a member leaves the group."""
+    if not update.message or not update.message.left_chat_member:
+        return
+    member = update.message.left_chat_member
+    name = member.mention_html() or member.full_name
+    await update.message.reply_html(
+        f"👋 Goodbye, {name}! Hope the door hits you on the way out."
+    )
+
+# --- 8. RUNTIME ENGINE START ---
 def main() -> None:
     # 💡 API key from @BotFather
-    TOKEN = os.getenv("TELEGRAM_BOT_TOKEN").strip()
+    TOKEN = os.getenv("TELEGRAM_BOT_TOKEN").strip('"')  # Ensure no extra quotes from .env parsing
 
     if TOKEN  == "":
         print("❌ ERROR: Please paste your real Telegram Bot Token into line 144 before running!")
@@ -215,6 +257,9 @@ def main() -> None:
     # Register handlers to the system
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler("status", status_command))
+    application.add_handler(ChatMemberHandler(bot_added_to_group, chat_member_types=ChatMemberHandler.MY_CHAT_MEMBER))
+    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_members))
+    application.add_handler(MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, goodbye_member))
 
     print("⚡ System local runtime online. Press Ctrl+C in this terminal to stop the bot.")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
